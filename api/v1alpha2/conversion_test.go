@@ -19,11 +19,13 @@ package v1alpha2
 import (
 	"testing"
 
+	fuzz "github.com/google/gofuzz"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/cluster-api/api/v1alpha3"
 	utilconversion "sigs.k8s.io/cluster-api/util/conversion"
@@ -36,9 +38,21 @@ func TestFuzzyConversion(t *testing.T) {
 	g.Expect(v1alpha3.AddToScheme(scheme)).To(Succeed())
 
 	t.Run("for Cluster", utilconversion.FuzzTestFunc(scheme, &v1alpha3.Cluster{}, &Cluster{}))
-	t.Run("for Machine", utilconversion.FuzzTestFunc(scheme, &v1alpha3.Machine{}, &Machine{}))
-	t.Run("for MachineSet", utilconversion.FuzzTestFunc(scheme, &v1alpha3.MachineSet{}, &MachineSet{}))
-	t.Run("for MachineDeployment", utilconversion.FuzzTestFunc(scheme, &v1alpha3.MachineDeployment{}, &MachineDeployment{}))
+	t.Run("for Machine", utilconversion.FuzzTestFunc(scheme, &v1alpha3.Machine{}, &Machine{}, machineSpecDeprecatedFieldsFuzzer))
+	t.Run("for MachineSet", utilconversion.FuzzTestFunc(scheme, &v1alpha3.MachineSet{}, &MachineSet{}, machineSpecDeprecatedFieldsFuzzer))
+	t.Run("for MachineDeployment", utilconversion.FuzzTestFunc(scheme, &v1alpha3.MachineDeployment{}, &MachineDeployment{}, machineSpecDeprecatedFieldsFuzzer))
+}
+
+func machineSpecDeprecatedFieldsFuzzer(codecs runtimeserializer.CodecFactory) []interface{} {
+	return []interface{}{
+		func(o *MachineSpec, c fuzz.Continue) {
+			o.ObjectMeta = ObjectMeta{}
+			c.Fuzz(&o.Bootstrap)
+			c.Fuzz(&o.InfrastructureRef)
+			c.Fuzz(&o.ProviderID)
+			c.Fuzz(&o.Version)
+		},
+	}
 }
 
 func TestConvertCluster(t *testing.T) {
