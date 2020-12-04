@@ -319,7 +319,12 @@ func TestKubeadmControlPlaneValidateUpdate(t *testing.T) {
 
 	apiServer := before.DeepCopy()
 	apiServer.Spec.KubeadmConfigSpec.ClusterConfiguration.APIServer = kubeadmv1beta1.APIServer{
+		ControlPlaneComponent: kubeadmv1beta1.ControlPlaneComponent{
+			ExtraArgs:    map[string]string{"foo": "bar"},
+			ExtraVolumes: []kubeadmv1beta1.HostPathMount{{Name: "mount1"}},
+		},
 		TimeoutForControlPlane: &metav1.Duration{Duration: 5 * time.Minute},
+		CertSANs:               []string{"foo", "bar"},
 	}
 
 	controllerManager := before.DeepCopy()
@@ -563,8 +568,8 @@ func TestKubeadmControlPlaneValidateUpdate(t *testing.T) {
 			kcp:       controlPlaneEndpoint,
 		},
 		{
-			name:      "should fail when making a change to the cluster config's apiServer",
-			expectErr: true,
+			name:      "should allow changes to the cluster config's apiServer",
+			expectErr: false,
 			before:    before,
 			kcp:       apiServer,
 		},
