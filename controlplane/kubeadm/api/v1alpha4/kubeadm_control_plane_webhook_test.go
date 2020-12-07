@@ -329,7 +329,8 @@ func TestKubeadmControlPlaneValidateUpdate(t *testing.T) {
 
 	controllerManager := before.DeepCopy()
 	controllerManager.Spec.KubeadmConfigSpec.ClusterConfiguration.ControllerManager = kubeadmv1beta1.ControlPlaneComponent{
-		ExtraArgs: map[string]string{"controller manager field": "controller manager value"},
+		ExtraArgs:    map[string]string{"controller manager field": "controller manager value"},
+		ExtraVolumes: []kubeadmv1beta1.HostPathMount{{Name: "mount", HostPath: "/foo", MountPath: "bar", ReadOnly: true, PathType: "File"}},
 	}
 
 	scheduler := before.DeepCopy()
@@ -574,8 +575,8 @@ func TestKubeadmControlPlaneValidateUpdate(t *testing.T) {
 			kcp:       apiServer,
 		},
 		{
-			name:      "should fail when making a change to the cluster config's controllerManager",
-			expectErr: true,
+			name:      "should allow changes to the cluster config's controllerManager",
+			expectErr: false,
 			before:    before,
 			kcp:       controllerManager,
 		},

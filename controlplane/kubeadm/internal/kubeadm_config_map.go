@@ -39,6 +39,7 @@ const (
 	dnsImageTagKey           = "imageTag"
 	configImageRepositoryKey = "imageRepository"
 	apiServerKey             = "apiServer"
+	controllerManagerKey     = "controllerManager"
 )
 
 // kubeadmConfig wraps up interactions necessary for modifying the kubeadm config during an upgrade.
@@ -204,6 +205,15 @@ func (k *kubeadmConfig) UpdateAPIServer(apiServer kubeadmv1.APIServer) (bool, er
 	changed, err := k.updateClusterConfiguration(apiServer, apiServerKey)
 	if err != nil {
 		return false, errors.Wrap(err, "unable to update api server configuration in kubeadm config map")
+	}
+	return changed, nil
+}
+
+// UpdateControllerManager sets the controller manager configuration to values set in `controllerManager` in kubeadm config map.
+func (k *kubeadmConfig) UpdateControllerManager(controllerManager kubeadmv1.ControlPlaneComponent) (bool, error) {
+	changed, err := k.updateClusterConfiguration(controllerManager, controllerManagerKey)
+	if err != nil {
+		return false, errors.Wrap(err, "unable to update controller manager configuration in kubeadm config map")
 	}
 	return changed, nil
 }

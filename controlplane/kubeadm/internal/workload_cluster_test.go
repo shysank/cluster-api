@@ -599,6 +599,109 @@ kind: ClusterConfiguration
 	}
 }
 
+func TestUpdateControllerManagerInKubeadmConfigMap(t *testing.T) {
+	validControllerManagerConfig := `apiVersion: kubeadm.k8s.io/v1beta2
+controllerManager:
+  extraArgs:
+    foo: bar
+  extraVolumes:
+  - hostPath: /foo/bar
+    mountPath: /bar/baz
+    name: mount1
+kind: ClusterConfiguration
+`
+	kubeadmConfig := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      kubeadmConfigKey,
+			Namespace: metav1.NamespaceSystem,
+		},
+		Data: map[string]string{
+			clusterConfigurationKey: validControllerManagerConfig,
+		},
+	}
+
+	kubeadmConfigNoKey := kubeadmConfig.DeepCopy()
+	delete(kubeadmConfigNoKey.Data, clusterConfigurationKey)
+
+	kubeadmConfigBadData := kubeadmConfig.DeepCopy()
+	kubeadmConfigBadData.Data[clusterConfigurationKey] = `badConfigControllerManager`
+
+	g := NewWithT(t)
+	scheme := runtime.NewScheme()
+	g.Expect(corev1.AddToScheme(scheme)).To(Succeed())
+	tests := []struct {
+		name                      string
+		controllerManager         kubeadmv1beta1.ControlPlaneComponent
+		objs                      []client.Object
+		expectErr                 bool
+		expectedControllerManager string
+	}{
+		{
+			name:              "updates the config map",
+			controllerManager: kubeadmv1beta1.ControlPlaneComponent{ExtraArgs: map[string]string{"foo": "bar"}},
+			objs:              []client.Object{kubeadmConfig},
+			expectErr:         false,
+			expectedControllerManager: `apiVersion: kubeadm.k8s.io/v1beta2
+controllerManager:
+  extraArgs:
+    foo: bar
+kind: ClusterConfiguration
+`,
+		},
+		{
+			name:                      "returns error if cannot find config map",
+			expectErr:                 true,
+			expectedControllerManager: validControllerManagerConfig,
+		},
+		{
+			name:                      "returns error if config has bad data",
+			objs:                      []client.Object{kubeadmConfigBadData},
+			controllerManager:         kubeadmv1beta1.ControlPlaneComponent{ExtraArgs: map[string]string{"foo": "bar"}},
+			expectErr:                 true,
+			expectedControllerManager: validControllerManagerConfig,
+		},
+		{
+			name:                      "returns error if config doesn't have cluster config key",
+			objs:                      []client.Object{kubeadmConfigNoKey},
+			controllerManager:         kubeadmv1beta1.ControlPlaneComponent{ExtraArgs: map[string]string{"foo": "bar"}},
+			expectErr:                 true,
+			expectedControllerManager: validControllerManagerConfig,
+		},
+		{
+			name: "should not update config map if no changes are detected",
+			objs: []client.Object{kubeadmConfig},
+			controllerManager: kubeadmv1beta1.ControlPlaneComponent{
+				ExtraArgs:    map[string]string{"foo": "bar"},
+				ExtraVolumes: []kubeadmv1beta1.HostPathMount{{Name: "mount1", HostPath: "/foo/bar", MountPath: "/bar/baz"}},
+			},
+			expectedControllerManager: validControllerManagerConfig,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.objs...).Build()
+			w := &Workload{
+				Client: fakeClient,
+			}
+			err := w.UpdateControllerManagerInKubeadmConfigMap(ctx, tt.controllerManager)
+			if tt.expectErr {
+				g.Expect(err).To(HaveOccurred())
+				return
+			}
+			g.Expect(err).ToNot(HaveOccurred())
+			var actualConfig corev1.ConfigMap
+			g.Expect(w.Client.Get(
+				ctx,
+				client.ObjectKey{Name: kubeadmConfigKey, Namespace: metav1.NamespaceSystem},
+				&actualConfig,
+			)).To(Succeed())
+			g.Expect(actualConfig.Data[clusterConfigurationKey]).Should(Equal(tt.expectedControllerManager))
+		})
+	}
+}
+
 func TestClusterStatus(t *testing.T) {
 	node1 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{

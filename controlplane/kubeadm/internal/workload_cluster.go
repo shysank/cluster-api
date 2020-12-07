@@ -71,6 +71,7 @@ type WorkloadCluster interface {
 	UpdateImageRepositoryInKubeadmConfigMap(ctx context.Context, imageRepository string) error
 	UpdateEtcdVersionInKubeadmConfigMap(ctx context.Context, imageRepository, imageTag string) error
 	UpdateAPIServerInKubeadmConfigMap(ctx context.Context, apiServer kubeadmv1.APIServer) error
+	UpdateControllerManagerInKubeadmConfigMap(ctx context.Context, controllerManager kubeadmv1.ControlPlaneComponent) error
 	UpdateKubeletConfigMap(ctx context.Context, version semver.Version) error
 	UpdateKubeProxyImageInfo(ctx context.Context, kcp *controlplanev1.KubeadmControlPlane) error
 	UpdateCoreDNS(ctx context.Context, kcp *controlplanev1.KubeadmControlPlane) error
@@ -192,6 +193,29 @@ func (w *Workload) UpdateAPIServerInKubeadmConfigMap(ctx context.Context, apiSer
 	}
 	config := &kubeadmConfig{ConfigMap: kubeadmConfigMap}
 	changed, err := config.UpdateAPIServer(apiServer)
+	if err != nil {
+		return err
+	}
+
+	if !changed {
+		return nil
+	}
+
+	if err := w.Client.Update(ctx, config.ConfigMap); err != nil {
+		return errors.Wrap(err, "error updating kubeadm ConfigMap")
+	}
+	return nil
+}
+
+// UpdateControllerManagerInKubeadmConfigMap updates controller manager configuration in kubeadm config map.
+func (w *Workload) UpdateControllerManagerInKubeadmConfigMap(ctx context.Context, controllerManager kubeadmv1.ControlPlaneComponent) error {
+	configMapKey := ctrlclient.ObjectKey{Name: kubeadmConfigKey, Namespace: metav1.NamespaceSystem}
+	kubeadmConfigMap, err := w.getConfigMap(ctx, configMapKey)
+	if err != nil {
+		return err
+	}
+	config := &kubeadmConfig{ConfigMap: kubeadmConfigMap}
+	changed, err := config.UpdateControllerManager(controllerManager)
 	if err != nil {
 		return err
 	}
