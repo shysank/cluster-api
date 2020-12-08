@@ -801,3 +801,167 @@ kind: ClusterConfiguration
 		})
 	}
 }
+
+func TestScheduler(t *testing.T) {
+
+	tests := []struct {
+		name         string
+		data         map[string]string
+		newScheduler kubeadmv1.ControlPlaneComponent
+		expected     string
+		expectErr    error
+		changed      bool
+	}{
+		{
+			name: "it should set the values when no scheduler config is present",
+			data: map[string]string{
+				clusterConfigurationKey: `apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+`},
+			newScheduler: kubeadmv1.ControlPlaneComponent{
+				ExtraArgs: map[string]string{
+					"foo": "bar",
+				},
+				ExtraVolumes: []kubeadmv1.HostPathMount{{Name: "mount1", HostPath: "/foo", MountPath: "/bar"}},
+			},
+			expected: `apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+scheduler:
+  extraArgs:
+    foo: bar
+  extraVolumes:
+  - hostPath: /foo
+    mountPath: /bar
+    name: mount1
+`,
+			changed: true,
+		},
+		{
+			name: "it should override existing config with the values set in spec",
+			data: map[string]string{
+				clusterConfigurationKey: `apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+scheduler:
+  extraArgs:
+   foo: bar
+  extraVolumes:
+   - name: mount1
+     hostPath: /foo/bar
+     mountPath: /bar/baz
+`},
+			newScheduler: kubeadmv1.ControlPlaneComponent{
+				ExtraArgs: map[string]string{
+					"bar":     "baz",
+					"someKey": "someVal",
+				},
+				ExtraVolumes: []kubeadmv1.HostPathMount{
+					{
+						Name:      "mount2",
+						HostPath:  "/bar/baz",
+						MountPath: "/foo/bar",
+					},
+					{
+						Name:      "anotherMount",
+						HostPath:  "/a/b",
+						MountPath: "/c/d",
+					},
+				},
+			},
+			expected: `apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+scheduler:
+  extraArgs:
+    bar: baz
+    someKey: someVal
+  extraVolumes:
+  - hostPath: /bar/baz
+    mountPath: /foo/bar
+    name: mount2
+  - hostPath: /a/b
+    mountPath: /c/d
+    name: anotherMount
+`,
+			changed: true,
+		},
+		{
+			name: "it should not do anything if there are no changes",
+			data: map[string]string{
+				clusterConfigurationKey: `scheduler:
+  extraArgs:
+   foo: bar
+   bar: baz
+  extraVolumes:
+  - hostPath: /foo/bar
+    mountPath: /bar/baz
+    name: mount1
+  - hostPath: /a/b
+    mountPath: /c/d
+    name: mount2
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+`},
+			newScheduler: kubeadmv1.ControlPlaneComponent{
+				ExtraArgs: map[string]string{"foo": "bar", "bar": "baz"},
+				ExtraVolumes: []kubeadmv1.HostPathMount{{
+					Name:      "mount1",
+					HostPath:  "/foo/bar",
+					MountPath: "/bar/baz",
+				},
+					{
+						Name:      "mount2",
+						HostPath:  "/a/b",
+						MountPath: "/c/d",
+					},
+				},
+			},
+			expected: `scheduler:
+  extraArgs:
+   foo: bar
+   bar: baz
+  extraVolumes:
+  - hostPath: /foo/bar
+    mountPath: /bar/baz
+    name: mount1
+  - hostPath: /a/b
+    mountPath: /c/d
+    name: mount2
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+`,
+			changed: false,
+		},
+		{
+			name: "it should return error when the config is invalid",
+			data: map[string]string{
+				clusterConfigurationKey: `scheduler: invalidJson`},
+			newScheduler: kubeadmv1.ControlPlaneComponent{
+				ExtraArgs: map[string]string{"foo": "bar", "bar": "baz"},
+			},
+			expectErr: errors.New(""),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			kconfig := &kubeadmConfig{
+				ConfigMap: &corev1.ConfigMap{
+					Data: test.data,
+				},
+			}
+
+			changed, err := kconfig.UpdateScheduler(test.newScheduler)
+			if test.expectErr == nil {
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(changed).Should(Equal(test.changed))
+				g.Expect(kconfig.ConfigMap.Data[clusterConfigurationKey]).Should(Equal(test.expected))
+			} else {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(test.expectErr.Error()))
+				g.Expect(changed).Should(Equal(false))
+			}
+
+		})
+	}
+}

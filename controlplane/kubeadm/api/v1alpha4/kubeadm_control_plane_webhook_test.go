@@ -335,7 +335,8 @@ func TestKubeadmControlPlaneValidateUpdate(t *testing.T) {
 
 	scheduler := before.DeepCopy()
 	scheduler.Spec.KubeadmConfigSpec.ClusterConfiguration.Scheduler = kubeadmv1beta1.ControlPlaneComponent{
-		ExtraArgs: map[string]string{"scheduler field": "scheduler value"},
+		ExtraArgs:    map[string]string{"scheduler field": "scheduler value"},
+		ExtraVolumes: []kubeadmv1beta1.HostPathMount{{Name: "mount", HostPath: "/foo", MountPath: "bar", ReadOnly: true, PathType: "File"}},
 	}
 
 	dns := before.DeepCopy()
@@ -581,8 +582,8 @@ func TestKubeadmControlPlaneValidateUpdate(t *testing.T) {
 			kcp:       controllerManager,
 		},
 		{
-			name:      "should fail when making a change to the cluster config's scheduler",
-			expectErr: true,
+			name:      "should allow changes to the cluster config's scheduler",
+			expectErr: false,
 			before:    before,
 			kcp:       scheduler,
 		},

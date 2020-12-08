@@ -90,6 +90,10 @@ func (r *KubeadmControlPlaneReconciler) upgradeControlPlane(
 		if err := workloadCluster.UpdateControllerManagerInKubeadmConfigMap(ctx, kcp.Spec.KubeadmConfigSpec.ClusterConfiguration.ControllerManager); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "failed to update controller manager in the kubeadm config map")
 		}
+
+		if err := workloadCluster.UpdateSchedulerInKubeadmConfigMap(ctx, kcp.Spec.KubeadmConfigSpec.ClusterConfiguration.Scheduler); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to update scheduler in the kubeadm config map")
+		}
 	}
 
 	if err := workloadCluster.UpdateKubeletConfigMap(ctx, parsedVersion); err != nil {

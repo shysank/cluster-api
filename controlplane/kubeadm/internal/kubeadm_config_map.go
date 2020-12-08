@@ -40,6 +40,7 @@ const (
 	configImageRepositoryKey = "imageRepository"
 	apiServerKey             = "apiServer"
 	controllerManagerKey     = "controllerManager"
+	schedulerKey             = "scheduler"
 )
 
 // kubeadmConfig wraps up interactions necessary for modifying the kubeadm config during an upgrade.
@@ -214,6 +215,15 @@ func (k *kubeadmConfig) UpdateControllerManager(controllerManager kubeadmv1.Cont
 	changed, err := k.updateClusterConfiguration(controllerManager, controllerManagerKey)
 	if err != nil {
 		return false, errors.Wrap(err, "unable to update controller manager configuration in kubeadm config map")
+	}
+	return changed, nil
+}
+
+// UpdateScheduler sets the scheduler configuration to values set in `scheduler` in kubeadm config map.
+func (k *kubeadmConfig) UpdateScheduler(scheduler kubeadmv1.ControlPlaneComponent) (bool, error) {
+	changed, err := k.updateClusterConfiguration(scheduler, schedulerKey)
+	if err != nil {
+		return false, errors.Wrap(err, "unable to update scheduler configuration in kubeadm config map")
 	}
 	return changed, nil
 }
