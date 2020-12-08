@@ -642,8 +642,8 @@ func TestKubeadmControlPlaneValidateUpdate(t *testing.T) {
 			kcp:       useHyperKubeImage,
 		},
 		{
-			name:      "should fail when making a change to the cluster config's featureGates",
-			expectErr: true,
+			name:      "should allow changes to the cluster config's featureGates",
+			expectErr: false,
 			before:    before,
 			kcp:       featureGates,
 		},

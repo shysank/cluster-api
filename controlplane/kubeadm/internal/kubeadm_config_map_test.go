@@ -965,3 +965,98 @@ kind: ClusterConfiguration
 		})
 	}
 }
+
+func TestFeatureGates(t *testing.T) {
+
+	tests := []struct {
+		name            string
+		data            map[string]string
+		newFeatureGates map[string]bool
+		expected        string
+		expectErr       error
+		changed         bool
+	}{
+		{
+			name: "it should set the values when no feature gates are present",
+			data: map[string]string{
+				clusterConfigurationKey: `apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+`},
+			newFeatureGates: map[string]bool{"feature1": true, "feature2": false},
+			expected: `apiVersion: kubeadm.k8s.io/v1beta2
+featureGates:
+  feature1: true
+  feature2: false
+kind: ClusterConfiguration
+`,
+			changed: true,
+		},
+		{
+			name: "it should override existing config with the values set in spec",
+			data: map[string]string{
+				clusterConfigurationKey: `apiVersion: kubeadm.k8s.io/v1beta2
+featureGates:
+  foo: true
+  bar: false
+kind: ClusterConfiguration
+`},
+			newFeatureGates: map[string]bool{"feature1": true, "feature2": false},
+			expected: `apiVersion: kubeadm.k8s.io/v1beta2
+featureGates:
+  feature1: true
+  feature2: false
+kind: ClusterConfiguration
+`,
+			changed: true,
+		},
+		{
+			name: "it should not do anything if there are no changes",
+			data: map[string]string{
+				clusterConfigurationKey: `apiVersion: kubeadm.k8s.io/v1beta2
+featureGates:
+  feature1: true
+  feature2: false
+kind: ClusterConfiguration
+`},
+			newFeatureGates: map[string]bool{"feature1": true, "feature2": false},
+			expected: `apiVersion: kubeadm.k8s.io/v1beta2
+featureGates:
+  feature1: true
+  feature2: false
+kind: ClusterConfiguration
+`,
+			changed: false,
+		},
+		{
+			name: "it should return error when the config is invalid",
+			data: map[string]string{
+				clusterConfigurationKey: `featureGates: invalidJson`},
+			newFeatureGates: map[string]bool{"feature1": true, "feature2": false},
+			expectErr:       errors.New(""),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			kconfig := &kubeadmConfig{
+				ConfigMap: &corev1.ConfigMap{
+					Data: test.data,
+				},
+			}
+
+			changed, err := kconfig.UpdateFeatureGates(test.newFeatureGates)
+			if test.expectErr == nil {
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(changed).Should(Equal(test.changed))
+				g.Expect(kconfig.ConfigMap.Data[clusterConfigurationKey]).Should(Equal(test.expected))
+			} else {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(test.expectErr.Error()))
+				g.Expect(changed).Should(Equal(false))
+			}
+
+		})
+	}
+}

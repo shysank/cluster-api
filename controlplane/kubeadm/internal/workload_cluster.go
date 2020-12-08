@@ -73,6 +73,7 @@ type WorkloadCluster interface {
 	UpdateAPIServerInKubeadmConfigMap(ctx context.Context, apiServer kubeadmv1.APIServer) error
 	UpdateControllerManagerInKubeadmConfigMap(ctx context.Context, controllerManager kubeadmv1.ControlPlaneComponent) error
 	UpdateSchedulerInKubeadmConfigMap(ctx context.Context, scheduler kubeadmv1.ControlPlaneComponent) error
+	UpdateFeatureGatesInKubeadmConfigMap(ctx context.Context, featureGates map[string]bool) error
 	UpdateKubeletConfigMap(ctx context.Context, version semver.Version) error
 	UpdateKubeProxyImageInfo(ctx context.Context, kcp *controlplanev1.KubeadmControlPlane) error
 	UpdateCoreDNS(ctx context.Context, kcp *controlplanev1.KubeadmControlPlane) error
@@ -240,6 +241,29 @@ func (w *Workload) UpdateSchedulerInKubeadmConfigMap(ctx context.Context, schedu
 	}
 	config := &kubeadmConfig{ConfigMap: kubeadmConfigMap}
 	changed, err := config.UpdateScheduler(scheduler)
+	if err != nil {
+		return err
+	}
+
+	if !changed {
+		return nil
+	}
+
+	if err := w.Client.Update(ctx, config.ConfigMap); err != nil {
+		return errors.Wrap(err, "error updating kubeadm ConfigMap")
+	}
+	return nil
+}
+
+// UpdateFeatureGatesInKubeadmConfigMap updates feature gates in kubeadm config map.
+func (w *Workload) UpdateFeatureGatesInKubeadmConfigMap(ctx context.Context, featureGates map[string]bool) error {
+	configMapKey := ctrlclient.ObjectKey{Name: kubeadmConfigKey, Namespace: metav1.NamespaceSystem}
+	kubeadmConfigMap, err := w.getConfigMap(ctx, configMapKey)
+	if err != nil {
+		return err
+	}
+	config := &kubeadmConfig{ConfigMap: kubeadmConfigMap}
+	changed, err := config.UpdateFeatureGates(featureGates)
 	if err != nil {
 		return err
 	}

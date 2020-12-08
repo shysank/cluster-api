@@ -96,6 +96,12 @@ func (r *KubeadmControlPlaneReconciler) upgradeControlPlane(
 		}
 	}
 
+	if kcp.Spec.KubeadmConfigSpec.ClusterConfiguration != nil && len(kcp.Spec.KubeadmConfigSpec.ClusterConfiguration.FeatureGates) > 0 {
+		if err := workloadCluster.UpdateFeatureGatesInKubeadmConfigMap(ctx, kcp.Spec.KubeadmConfigSpec.ClusterConfiguration.FeatureGates); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to update feature gates in the kubeadm config map")
+		}
+	}
+
 	if err := workloadCluster.UpdateKubeletConfigMap(ctx, parsedVersion); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to upgrade kubelet config map")
 	}

@@ -805,6 +805,102 @@ scheduler:
 	}
 }
 
+func TestUpdateFeatureGatesInKubeadmConfigMap(t *testing.T) {
+	validFeatureGatesConfig := `apiVersion: kubeadm.k8s.io/v1beta2
+featureGates:
+  feature1: true
+  feature2: false
+kind: ClusterConfiguration
+`
+	kubeadmConfig := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      kubeadmConfigKey,
+			Namespace: metav1.NamespaceSystem,
+		},
+		Data: map[string]string{
+			clusterConfigurationKey: validFeatureGatesConfig,
+		},
+	}
+
+	kubeadmConfigNoKey := kubeadmConfig.DeepCopy()
+	delete(kubeadmConfigNoKey.Data, clusterConfigurationKey)
+
+	kubeadmConfigBadData := kubeadmConfig.DeepCopy()
+	kubeadmConfigBadData.Data[clusterConfigurationKey] = `badConfigFeatureGates`
+
+	g := NewWithT(t)
+	scheme := runtime.NewScheme()
+	g.Expect(corev1.AddToScheme(scheme)).To(Succeed())
+	tests := []struct {
+		name              string
+		featureGates      map[string]bool
+		objs              []client.Object
+		expectErr         bool
+		expectedScheduler string
+	}{
+		{
+			name:         "updates the config map",
+			featureGates: map[string]bool{"foo": true, "bar": false},
+			objs:         []client.Object{kubeadmConfig},
+			expectErr:    false,
+			expectedScheduler: `apiVersion: kubeadm.k8s.io/v1beta2
+featureGates:
+  bar: false
+  foo: true
+kind: ClusterConfiguration
+`,
+		},
+		{
+			name:              "returns error if cannot find config map",
+			expectErr:         true,
+			expectedScheduler: validFeatureGatesConfig,
+		},
+		{
+			name:              "returns error if config has bad data",
+			objs:              []client.Object{kubeadmConfigBadData},
+			featureGates:      map[string]bool{"foo": true, "bar": false},
+			expectErr:         true,
+			expectedScheduler: validFeatureGatesConfig,
+		},
+		{
+			name:              "returns error if config doesn't have cluster config key",
+			objs:              []client.Object{kubeadmConfigNoKey},
+			featureGates:      map[string]bool{"foo": true, "bar": false},
+			expectErr:         true,
+			expectedScheduler: validFeatureGatesConfig,
+		},
+		{
+			name:              "should not update config map if no changes are detected",
+			objs:              []client.Object{kubeadmConfig},
+			featureGates:      map[string]bool{"feature2": false, "feature1": true},
+			expectedScheduler: validFeatureGatesConfig,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.objs...).Build()
+			w := &Workload{
+				Client: fakeClient,
+			}
+			err := w.UpdateFeatureGatesInKubeadmConfigMap(ctx, tt.featureGates)
+			if tt.expectErr {
+				g.Expect(err).To(HaveOccurred())
+				return
+			}
+			g.Expect(err).ToNot(HaveOccurred())
+			var actualConfig corev1.ConfigMap
+			g.Expect(w.Client.Get(
+				ctx,
+				client.ObjectKey{Name: kubeadmConfigKey, Namespace: metav1.NamespaceSystem},
+				&actualConfig,
+			)).To(Succeed())
+			g.Expect(actualConfig.Data[clusterConfigurationKey]).Should(Equal(tt.expectedScheduler))
+		})
+	}
+}
+
 func TestClusterStatus(t *testing.T) {
 	node1 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{

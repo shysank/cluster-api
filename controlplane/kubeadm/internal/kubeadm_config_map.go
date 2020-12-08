@@ -41,6 +41,7 @@ const (
 	apiServerKey             = "apiServer"
 	controllerManagerKey     = "controllerManager"
 	schedulerKey             = "scheduler"
+	featureGatesKey          = "featureGates"
 )
 
 // kubeadmConfig wraps up interactions necessary for modifying the kubeadm config during an upgrade.
@@ -224,6 +225,15 @@ func (k *kubeadmConfig) UpdateScheduler(scheduler kubeadmv1.ControlPlaneComponen
 	changed, err := k.updateClusterConfiguration(scheduler, schedulerKey)
 	if err != nil {
 		return false, errors.Wrap(err, "unable to update scheduler configuration in kubeadm config map")
+	}
+	return changed, nil
+}
+
+// UpdateFeatureGates sets the feature gates to values set in `featureGates` in kubeadm config map.
+func (k *kubeadmConfig) UpdateFeatureGates(featureGates map[string]bool) (bool, error) {
+	changed, err := k.updateClusterConfiguration(featureGates, featureGatesKey)
+	if err != nil {
+		return false, errors.Wrap(err, "unable to update feature gates in kubeadm config map")
 	}
 	return changed, nil
 }

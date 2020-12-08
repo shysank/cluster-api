@@ -91,6 +91,7 @@ const (
 	apiServer            = "apiServer"
 	controllerManager    = "controllerManager"
 	scheduler            = "scheduler"
+	featureGates         = "featureGates"
 )
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -107,6 +108,7 @@ func (in *KubeadmControlPlane) ValidateUpdate(old runtime.Object) error {
 		{spec, kubeadmConfigSpec, clusterConfiguration, apiServer, "*"},
 		{spec, kubeadmConfigSpec, clusterConfiguration, controllerManager, "*"},
 		{spec, kubeadmConfigSpec, clusterConfiguration, scheduler, "*"},
+		{spec, kubeadmConfigSpec, clusterConfiguration, featureGates, "*"},
 		{spec, kubeadmConfigSpec, initConfiguration, nodeRegistration, "*"},
 		{spec, kubeadmConfigSpec, joinConfiguration, nodeRegistration, "*"},
 		{spec, kubeadmConfigSpec, preKubeadmCommands},
